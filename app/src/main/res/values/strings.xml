@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CheckItOut</string>
+    <string name="notif_listener_label">CheckItOut Media Listener</string>
+    <string name="a11y_label">CheckItOut Volume Trigger</string>
+    <string name="a11y_description">音量ボタンの長押しで「いいね」を保存します。曲情報を画面オフのまま記録するために使います。</string>
+    <string name="tile_label">いいね追加</string>
+
+    <string name="channel_capture_name">再生中の曲を監視</string>
+    <string name="channel_capture_desc">バックグラウンドで通知から曲情報を取得します</string>
+    <string name="fg_notif_title">CheckItOut 監視中</string>
+    <string name="fg_notif_text">再生中の曲を記録しています</string>
+
+    <string name="tts_added">%1$s を %2$s に追加しました</string>
+    <string name="tts_no_track">追加できる曲がありません</string>
+
+    <string name="action_like_now">👍 いいね</string>
+    <string name="action_like_prev">前の曲を👍</string>
+    <string name="action_like_prev_short">前の曲</string>
+    <string name="widget_idle">再生中の曲を待機中…</string>
+    <string name="widget_description">いま流れている曲をワンタップで「いいね」に追加します。ロック画面のウィジェットエリアにも置けます。</string>
+</resources>

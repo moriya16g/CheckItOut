@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Widget metadata.
+
+  - widgetCategory="home_screen": required category. The Pixel 10 Pro lock-screen
+    widget panel (Android 16 beta) picks up any normal home_screen widget, so we
+    do NOT need the deprecated "keyguard" category here.
+  - previewLayout: shown in the widget picker and in the lock-screen widget
+    chooser, instead of a static PNG.
+  - description: shown under the preview in the widget picker.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="60dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="1"
+    android:maxResizeWidth="320dp"
+    android:maxResizeHeight="120dp"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_like"
+    android:previewLayout="@layout/widget_like"
+    android:description="@string/widget_description"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />
