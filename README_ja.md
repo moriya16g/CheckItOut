@@ -35,6 +35,12 @@ TTS で *「○○ を ローカル保存 に追加しました」* と読み上
 ### エクスポート
 ワンタップで **CSV** または **Markdown** にエクスポート。各行に Spotify / Apple Music / Last.fm の URL を含みます。
 
+### 端末間同期
+Google Drive / Dropbox / OneDrive が同期しているフォルダを選ぶだけ。CheckItOut が JSON ファイルを書き出し、クラウドアプリが残りをやってくれます。**WorkManager** がオフライン時に自動リトライ。手動の「いま同期」ボタンも用意しています。
+
+### すべての「いいね」はユニークな瞬間
+同じ曲を何度いいねしてもOK。各「いいね」はそれぞれ独立したログエントリとして、固有のタイムスタンプ（将来的には位置・天気・気分も）と共に保持されます。同期エンジンは端末間でこれらをすべて保持し、重複として潰すことはありません。
+
 ### 拡張可能な保存先
 `PlaylistSink` はインターフェースです。MVP では `LocalDbSink`（Room）のみですが、Spotify Web API 書き込みや YouTube Music 連携などを 1 クラス追加するだけで全トリガーから自動的に呼ばれます。
 
@@ -57,7 +63,7 @@ MediaNotificationListener ──push──▶ RecentBuffer (直近10曲)
   └─ アプリ内ボタン       (Compose UI)
        │
        ▼
-  LikeAction ──▶ PlaylistSink(s) ──▶ Room DB
+    LikeAction ──▶ PlaylistSink(s) ──▶ Room DB ──sync──▶ JSON ファイル (クラウドフォルダ)
        │
        └──▶ TTS 「○○を追加しました」
 ```
@@ -83,6 +89,9 @@ app/src/main/java/com/example/checkitout/
 │   ├── LikeTileService.kt         # クイック設定タイル
 │   ├── MediaNotificationListener.kt  # 任意プレイヤーの MediaSession を読み取り
 │   └── VolumeKeyAccessibilityService.kt  # 音量キー長押し（画面オフ対応）
+├── sync/
+│   ├── SyncManager.kt             # SAF ベースの JSON 読み書き + 双方向マージ
+│   └── SyncWorker.kt              # WorkManager ワーカー（オフラインリトライ付き）
 ├── ui/
 │   ├── MainActivity.kt            # Compose UI: 権限案内、バッファ表示、いいね一覧
 │   └── Permissions.kt             # 権限チェック＆設定画面遷移ヘルパー
@@ -120,6 +129,20 @@ Android Studio で開く → Sync → Run。最小 SDK 26（Android 8.0）。
 | ロック画面通知 | 「👍」または「前の曲」をタップ | 現在 / ひとつ前 |
 | ホーム画面ウィジェット | 「👍」または「前の曲」をタップ | 現在 / ひとつ前 |
 | アプリ内ボタン | タップ | 現在 / ひとつ前 |
+
+## 端末間同期
+
+1. アプリ内で **「同期フォルダを選択」** をタップ
+2. Google Drive / Dropbox / OneDrive が管理するフォルダを選ぶ
+3. CheckItOut が `checkitout_sync.json` をそのフォルダに作成
+4. 同じフォルダを指す別の端末が自動的にマージ
+
+| 項目 | 詳細 |
+|---|---|
+| マージ戦略 | `syncId`（タイトル＋アーティスト＋ミリ秒タイムスタンプ）による和集合。各いいねはユニーク |
+| バックグラウンド同期 | WorkManager、1時間ごと、ネットワーク必須 |
+| オフライン | 指数バックオフでキューイング。接続回復時に自動リトライ |
+| 手動 | 「いま同期」ボタンで即時プッシュ/プル |
 
 ## 既知の制限
 

@@ -48,6 +48,8 @@ import com.example.checkitout.CheckItOutApp
 import com.example.checkitout.action.LikeAction
 import com.example.checkitout.data.LikedTrack
 import com.example.checkitout.service.CaptureService
+import com.example.checkitout.sync.SyncManager
+import com.example.checkitout.sync.SyncWorker
 import com.example.checkitout.util.Exporter
 import com.example.checkitout.util.MusicLinks
 import kotlinx.coroutines.flow.Flow
@@ -154,6 +156,9 @@ private fun MainScreen() {
             ) { Text("ひとつ前の曲を「いいね」") }
 
             Spacer(Modifier.height(16.dp))
+            SyncSection()
+
+            Spacer(Modifier.height(16.dp))
             Text("再生履歴バッファ（新しい順）", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(4.dp))
             if (recent.isEmpty()) {
@@ -227,6 +232,81 @@ private fun ExportButtons(tracks: List<LikedTrack>) {
 
 private fun toast(context: android.content.Context, msg: String) {
     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+}
+
+@Composable
+private fun SyncSection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var folderUri by remember { mutableStateOf(SyncManager.getSavedFolderUri(context)) }
+    var syncing by remember { mutableStateOf(false) }
+    val lastSync = remember(folderUri) { SyncManager.getLastSyncTime(context) }
+    val df = remember { SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()) }
+
+    val folderPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        SyncManager.saveFolderUri(context, uri)
+        folderUri = uri
+        SyncWorker.enqueuePeriodicIfConfigured(context)
+        toast(context, "同期フォルダを設定しました")
+    }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp)) {
+            Text("端末間同期", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(4.dp))
+            if (folderUri != null) {
+                Text(
+                    "同期先: ${folderUri?.lastPathSegment ?: "設定済み"}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                if (lastSync > 0) {
+                    Text(
+                        "最終同期: ${df.format(Date(lastSync))}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        enabled = !syncing,
+                        onClick = {
+                            syncing = true
+                            scope.launch {
+                                val result = runCatching { SyncManager.sync(context) }
+                                syncing = false
+                                result.fold(
+                                    { toast(context, "同期完了: ${it}件インポート") },
+                                    { toast(context, "同期失敗: ${it.message}") }
+                                )
+                            }
+                        }
+                    ) { Text(if (syncing) "同期中…" else "いま同期") }
+                    OutlinedButton(onClick = {
+                        folderPicker.launch(null)
+                    }) { Text("フォルダ変更") }
+                    TextButton(onClick = {
+                        SyncManager.clearFolderUri(context)
+                        SyncWorker.cancelPeriodic(context)
+                        folderUri = null
+                        toast(context, "同期を解除しました")
+                    }) { Text("解除") }
+                }
+            } else {
+                Text(
+                    "Google Drive / Dropbox / OneDrive のフォルダを選ぶと、" +
+                            "いいねリストが端末間で自動同期されます。",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = { folderPicker.launch(null) }) {
+                    Text("同期フォルダを選択")
+                }
+            }
+        }
+    }
 }
 
 @Composable

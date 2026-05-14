@@ -35,6 +35,12 @@ Every saved track gets links to **Spotify**, **Apple Music**, and **Last.fm**. T
 ### Export
 One-tap **CSV** or **Markdown** export with Spotify / Apple Music / Last.fm URLs included in every row.
 
+### Cross-Device Sync
+Pick any folder synced by Google Drive, Dropbox, or OneDrive. CheckItOut writes a JSON file there; the cloud app handles the rest. **WorkManager** automatically retries when offline — or hit the manual "Sync now" button.
+
+### Every Like Is a Unique Moment
+Liking the same song twice is intentional, not a bug. Each "like" is a separate log entry with its own timestamp (and, in future versions, location / weather / mood). The sync engine preserves every entry across devices — it never collapses duplicates.
+
 ### Extensible Sinks
 `PlaylistSink` is an interface. The MVP ships with `LocalDbSink` (Room). Adding Spotify Web API write-back, YouTube Music, webhooks, etc. is a single-class addition.
 
@@ -57,7 +63,7 @@ MediaNotificationListener ──push──▶ RecentBuffer (last 10 tracks)
   └─ In-app button         (Compose UI)
        │
        ▼
-  LikeAction ──▶ PlaylistSink(s) ──▶ Room DB
+    LikeAction ──▶ PlaylistSink(s) ──▶ Room DB ──sync──▶ JSON file (cloud folder)
        │
        └──▶ TTS "Added ○○"
 ```
@@ -83,6 +89,9 @@ app/src/main/java/com/example/checkitout/
 │   ├── LikeTileService.kt         # Quick Settings tile
 │   ├── MediaNotificationListener.kt  # Reads MediaSession from any player
 │   └── VolumeKeyAccessibilityService.kt  # Volume long-press (screen off)
+├── sync/
+│   ├── SyncManager.kt             # SAF-based JSON read/write + bidirectional merge
+│   └── SyncWorker.kt              # WorkManager worker with offline retry
 ├── ui/
 │   ├── MainActivity.kt            # Compose UI: permissions, buffer, liked list
 │   └── Permissions.kt             # Permission check & navigation helpers
@@ -120,6 +129,20 @@ The app shows guidance cards on launch if either permission is missing.
 | Lock-screen notification | Tap "👍" or "Previous" | Current or previous track |
 | Home-screen widget | Tap "👍" or "Previous" | Current or previous track |
 | In-app buttons | Tap | Current or previous track |
+
+### Cross-Device Sync
+
+1. In the app, tap **"同期フォルダを選択"** (Select sync folder)
+2. Choose a folder managed by Google Drive / Dropbox / OneDrive
+3. CheckItOut creates `checkitout_sync.json` in that folder
+4. Other devices pointing to the same folder will merge automatically
+
+| Aspect | Detail |
+|---|---|
+| Merge strategy | Union by `syncId` (title + artist + ms-timestamp). Each like is unique |
+| Background sync | WorkManager, every 1 hour, requires network |
+| Offline | Queued with exponential back-off; auto-retries on reconnect |
+| Manual | "Sync now" button for immediate push/pull |
 
 ## Known Limitations
 
