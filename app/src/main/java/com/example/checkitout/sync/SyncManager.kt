@@ -129,6 +129,10 @@ object SyncManager {
 
     // ──────────────────────── JSON ↔ LikedTrack ────────────────────────
 
+    private fun JSONObject.putOpt(name: String, value: Any?) {
+        if (value != null) put(name, value)
+    }
+
     private fun trackToJson(t: LikedTrack): JSONObject = JSONObject().apply {
         put("syncId", t.syncId)
         put("title", t.title)
@@ -137,7 +141,47 @@ object SyncManager {
         put("packageName", t.packageName)
         put("likedAt", t.likedAt)
         put("playlist", t.playlist)
+        // LikeContext fields (omit when null to keep JSON compact)
+        putOpt("tzId", t.tzId)
+        putOpt("dayOfWeek", t.dayOfWeek)
+        putOpt("hourOfDay", t.hourOfDay)
+        putOpt("timeBucket", t.timeBucket)
+        putOpt("positionMs", t.positionMs)
+        putOpt("durationMs", t.durationMs)
+        putOpt("positionPct", t.positionPct?.toDouble())
+        putOpt("audioOutput", t.audioOutput)
+        putOpt("btDeviceName", t.btDeviceName)
+        putOpt("lat", t.lat)
+        putOpt("lng", t.lng)
+        putOpt("placeLabel", t.placeLabel)
+        putOpt("activity", t.activity)
+        putOpt("stepCount", t.stepCount)
+        putOpt("accelMagnitude", t.accelMagnitude?.toDouble())
+        putOpt("weather", t.weather)
+        putOpt("tempC", t.tempC?.toDouble())
+        putOpt("humidityPct", t.humidityPct?.toDouble())
+        putOpt("spotifyId", t.spotifyId)
+        putOpt("bpm", t.bpm?.toDouble())
+        putOpt("energy", t.energy?.toDouble())
+        putOpt("valence", t.valence?.toDouble())
+        putOpt("danceability", t.danceability?.toDouble())
+        putOpt("acousticness", t.acousticness?.toDouble())
+        putOpt("instrumentalness", t.instrumentalness?.toDouble())
+        putOpt("musicKey", t.musicKey)
+        putOpt("loudness", t.loudness?.toDouble())
+        putOpt("lyricsSnippet", t.lyricsSnippet)
     }
+
+    private fun JSONObject.optIntOrNull(name: String): Int? =
+        if (has(name) && !isNull(name)) optInt(name) else null
+    private fun JSONObject.optLongOrNull(name: String): Long? =
+        if (has(name) && !isNull(name)) optLong(name) else null
+    private fun JSONObject.optDoubleOrNull(name: String): Double? =
+        if (has(name) && !isNull(name)) optDouble(name) else null
+    private fun JSONObject.optFloatOrNull(name: String): Float? =
+        optDoubleOrNull(name)?.toFloat()
+    private fun JSONObject.optStringOrNull(name: String): String? =
+        if (has(name) && !isNull(name)) optString(name).takeIf { it.isNotBlank() } else null
 
     private fun jsonToTrack(o: JSONObject): LikedTrack {
         val title = o.getString("title")
@@ -151,6 +195,34 @@ object SyncManager {
             likedAt = likedAt,
             playlist = o.optString("playlist", "default"),
             syncId = o.optString("syncId", LikedTrack.buildSyncId(title, artist, likedAt)),
+            tzId = o.optStringOrNull("tzId"),
+            dayOfWeek = o.optIntOrNull("dayOfWeek"),
+            hourOfDay = o.optIntOrNull("hourOfDay"),
+            timeBucket = o.optStringOrNull("timeBucket"),
+            positionMs = o.optLongOrNull("positionMs"),
+            durationMs = o.optLongOrNull("durationMs"),
+            positionPct = o.optFloatOrNull("positionPct"),
+            audioOutput = o.optStringOrNull("audioOutput"),
+            btDeviceName = o.optStringOrNull("btDeviceName"),
+            lat = o.optDoubleOrNull("lat"),
+            lng = o.optDoubleOrNull("lng"),
+            placeLabel = o.optStringOrNull("placeLabel"),
+            activity = o.optStringOrNull("activity"),
+            stepCount = o.optIntOrNull("stepCount"),
+            accelMagnitude = o.optFloatOrNull("accelMagnitude"),
+            weather = o.optStringOrNull("weather"),
+            tempC = o.optFloatOrNull("tempC"),
+            humidityPct = o.optFloatOrNull("humidityPct"),
+            spotifyId = o.optStringOrNull("spotifyId"),
+            bpm = o.optFloatOrNull("bpm"),
+            energy = o.optFloatOrNull("energy"),
+            valence = o.optFloatOrNull("valence"),
+            danceability = o.optFloatOrNull("danceability"),
+            acousticness = o.optFloatOrNull("acousticness"),
+            instrumentalness = o.optFloatOrNull("instrumentalness"),
+            musicKey = o.optIntOrNull("musicKey"),
+            loudness = o.optFloatOrNull("loudness"),
+            lyricsSnippet = o.optStringOrNull("lyricsSnippet"),
         )
     }
 

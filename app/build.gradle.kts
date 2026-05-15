@@ -1,8 +1,20 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
 }
+
+// Read optional Spotify credentials from local.properties (not checked into VCS).
+//   spotify.client.id=...
+//   spotify.client.secret=...
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val spotifyClientId: String = localProps.getProperty("spotify.client.id", "")
+val spotifyClientSecret: String = localProps.getProperty("spotify.client.secret", "")
 
 android {
     namespace = "com.example.checkitout"
@@ -14,6 +26,9 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
+
+        buildConfigField("String", "SPOTIFY_CLIENT_ID", "\"$spotifyClientId\"")
+        buildConfigField("String", "SPOTIFY_CLIENT_SECRET", "\"$spotifyClientSecret\"")
     }
 
     buildTypes {
@@ -31,6 +46,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"

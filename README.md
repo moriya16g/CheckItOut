@@ -33,6 +33,12 @@ Every saved track gets links to **Spotify**, **Apple Music**, and **Last.fm**. T
 ### Export
 One-tap **CSV** or **Markdown** export with Spotify / Apple Music / Last.fm URLs included in every row.
 
+### Moment Capture Context
+Each saved like can also preserve the surrounding moment: local time bucket, playback position, audio route (Bluetooth / wired / speaker), place label, weather, movement state, step count, Spotify audio-features, and a short lyrics snippet. Collection is **best-effort** and happens asynchronously after the like is saved, so the main action stays instant.
+
+### Local Analytics
+The app now includes an on-device **Analytics** view that turns your likes into something fun to browse: time-of-day bars, a day-hour heatmap, a mood quadrant (valence × energy), distribution donuts, top artists/places/apps, and automatically generated highlights such as peak listening time, weekend-vs-weekday energy shifts, and whether you tend to like songs early or near the chorus.
+
 ### Selection Delete
 Both the recent-playback buffer and the liked-song list support multi-select deletion from the app UI.
 
@@ -40,7 +46,7 @@ Both the recent-playback buffer and the liked-song list support multi-select del
 Pick or create a single `checkitout_sync.json` file in Google Drive, Dropbox, OneDrive, or another SAF-backed provider. CheckItOut reads and writes that file directly, which works even with providers that do not expose folder-tree selection. **WorkManager** automatically retries when offline — or hit the manual "Sync now" button.
 
 ### Every Like Is a Unique Moment
-Liking the same song twice is intentional, not a bug. Each "like" is a separate log entry with its own timestamp (and, in future versions, location / weather / mood). The sync engine preserves every entry across devices — it never collapses duplicates.
+Liking the same song twice is intentional, not a bug. Each "like" is a separate log entry with its own timestamp and its own captured context. The sync engine preserves every entry across devices — it never collapses duplicates.
 
 ### Extensible Sinks
 `PlaylistSink` is an interface. The MVP ships with `LocalDbSink` (Room). Adding Spotify Web API write-back, YouTube Music, webhooks, etc. is a single-class addition.
@@ -75,9 +81,12 @@ app/src/main/java/com/example/checkitout/
 ├── CheckItOutApp.kt              # Application, holds AppContainer
 ├── action/
 │   └── LikeAction.kt             # Central "like" entry point for all triggers
+├── analytics/
+│   └── LikeAnalytics.kt          # Local derived metrics + highlight generation
 ├── data/
 │   ├── AppContainer.kt            # Manual DI container
 │   ├── Database.kt                # Room entities, DAO, database
+│   ├── LikeContext.kt             # Flat analytics-friendly context snapshot
 │   ├── PlaylistSink.kt            # Sink interface + LocalDbSink
 │   ├── RecentBuffer.kt            # Thread-safe ring buffer with grace period
 │   └── TrackInfo.kt               # In-memory track snapshot model
@@ -92,12 +101,22 @@ app/src/main/java/com/example/checkitout/
 │   ├── SyncManager.kt             # SAF document-based JSON read/write + bidirectional merge
 │   └── SyncWorker.kt              # WorkManager worker with offline retry
 ├── ui/
-│   ├── MainActivity.kt            # Compose UI: permissions, buffer, liked list
+│   ├── AnalyticsScreen.kt         # Compose analytics dashboard / charts
+│   ├── MainActivity.kt            # Compose UI: home + analytics tabs
 │   └── Permissions.kt             # Permission check & navigation helpers
 ├── util/
 │   ├── Exporter.kt                # CSV / Markdown export with music links
+│   ├── Http.kt                    # Minimal blocking HTTP helper
 │   ├── MusicLinks.kt              # Spotify / Apple Music / Last.fm URL builders
-│   └── Speaker.kt                 # TTS wrapper
+│   ├── Speaker.kt                 # TTS wrapper
+│   └── context/
+│       ├── LikeContextCollector.kt    # Orchestrates all best-effort context capture
+│       ├── LocationCollector.kt       # Last known location lookup
+│       ├── LyricsCollector.kt         # lyrics.ovh snippet fetch
+│       ├── ReverseGeoCollector.kt     # Place label via reverse geocode
+│       ├── SensorContextCollector.kt  # Movement + steps + acceleration
+│       ├── SpotifyCollector.kt        # Spotify audio-features lookup
+│       └── WeatherCollector.kt        # Open-Meteo current conditions
 └── widget/
     └── LikeWidgetProvider.kt      # Home-screen / lock-screen widget
 ```
@@ -115,6 +134,13 @@ Open in Android Studio → Sync → Run. Min SDK 26 (Android 8.0).
 1. **Notification access** — Settings → Notifications → Notification access → enable *CheckItOut*
 
 The app shows guidance cards on launch if this permission is missing.
+
+### Optional Permissions For Richer Context
+
+- **Location** — enables place label and weather capture for each like.
+- **Physical activity** — enables movement state and step count capture on Android 10+.
+
+If you skip these, the core like flow still works. Those fields are just left null.
 
 ## Trigger Reference
 
@@ -147,10 +173,28 @@ The app shows guidance cards on launch if this permission is missing.
 - Some DRM-heavy apps may withhold title/artist from MediaSession.
 - Different OEM lock-screen policies may change how prominently action buttons are shown.
 
+## Optional: Spotify audio-features
+
+To enrich each like with BPM / energy / valence / danceability / key / loudness, register
+a free app at <https://developer.spotify.com/dashboard> and add the following to
+`local.properties` at the project root (the file is git-ignored):
+
+```
+spotify.client.id=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+spotify.client.secret=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Without these, the audio-features columns are simply left null. The rest of the
+context (time, place, weather, audio routing, activity, lyrics snippet) works
+unconditionally.
+
 ## Roadmap
 
-- **v0.2 "Moment Capture"** — Save location, weather, activity, and voice memo alongside each "like"
-- **v0.3 "Reflection"** — Weekly playlist generation (Spotify write-back) + 30-day re-listen nudge
+- **v0.2 "Moment Capture"** ✅ — Time bucket, location, place label, weather, audio routing (BT/wired/speaker),
+  activity (still/walking/running/vehicle), step count, Spotify audio-features (BPM/energy/valence/...),
+  and a lyrics snippet are all captured asynchronously in the background and attached to each "like" row.
+  Open `LikedTrack` columns are designed to be analytics-friendly (flat, nullable, normalized buckets).
+- **v0.3 "Reflection"** 🚧 — On-device analytics dashboard is in place; next up are weekly playlist generation (Spotify write-back) and 30-day re-listen nudges
 - **v0.4 "Artist Bond"** — Artist deep-dive screen, new release alerts, nearby concert notifications
 - **v0.5 "Lyric Snapshot"** — Save the lyrics around the playback position at the moment of "like"
 

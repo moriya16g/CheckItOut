@@ -10,6 +10,10 @@ data class TrackInfo(
     val packageName: String,
     /** epoch millis when this snapshot was observed */
     val observedAt: Long,
+    /** Last known playback position (ms) at observation time, if available. */
+    val positionMs: Long? = null,
+    /** Track total duration (ms), if reported by MediaSession metadata. */
+    val durationMs: Long? = null,
 ) {
     /** Key used for de-duplication across consecutive notifications. */
     val identity: String get() = "${packageName}|${title}|${artist.orEmpty()}"

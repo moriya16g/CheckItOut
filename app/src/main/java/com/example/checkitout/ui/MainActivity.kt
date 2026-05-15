@@ -67,6 +67,14 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { /* result ignored, UI re-renders on resume */ }
 
+    val requestLocationPerm = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { /* result ignored, UI re-renders on resume */ }
+
+    val requestActivityPerm = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* result ignored, UI re-renders on resume */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -95,11 +103,15 @@ private fun MainScreen() {
 
     // Re-check permission flags on resume.
     var notifGranted by remember { mutableStateOf(Permissions.isNotificationListenerEnabled(context)) }
+    var locationGranted by remember { mutableStateOf(Permissions.isLocationGranted(context)) }
+    var activityGranted by remember { mutableStateOf(Permissions.isActivityRecognitionGranted(context)) }
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 notifGranted = Permissions.isNotificationListenerEnabled(context)
+                locationGranted = Permissions.isLocationGranted(context)
+                activityGranted = Permissions.isActivityRecognitionGranted(context)
             }
         }
         owner.lifecycle.addObserver(observer)
@@ -113,8 +125,31 @@ private fun MainScreen() {
     var likedSelectionMode by remember { mutableStateOf(false) }
     var selectedRecent by remember { mutableStateOf(setOf<TrackInfo>()) }
     var selectedLikedIds by remember { mutableStateOf(setOf<Long>()) }
+    var tab by remember { mutableStateOf(0) } // 0=Home, 1=Analytics
 
-    Scaffold { inner ->
+    Scaffold(
+        topBar = {
+            androidx.compose.material3.TabRow(selectedTabIndex = tab) {
+                androidx.compose.material3.Tab(
+                    selected = tab == 0,
+                    onClick = { tab = 0 },
+                    text = { Text("ホーム") },
+                )
+                androidx.compose.material3.Tab(
+                    selected = tab == 1,
+                    onClick = { tab = 1 },
+                    text = { Text("分析") },
+                )
+            }
+        }
+    ) { inner ->
+        if (tab == 1) {
+            val analytics = remember(liked) {
+                com.example.checkitout.analytics.LikeAnalytics.compute(liked)
+            }
+            AnalyticsScreen(analytics, modifier = Modifier.padding(inner))
+            return@Scaffold
+        }
         LazyColumn(
             modifier = Modifier
                 .padding(inner)
@@ -138,6 +173,37 @@ private fun MainScreen() {
                         body = "再生中のアプリ（Spotify / YouTube Music など）から曲情報を取得するために必要です。",
                         actionLabel = "通知アクセス設定を開く",
                         onAction = { Permissions.openNotificationListenerSettings(context) }
+                    )
+                }
+            }
+
+            // Optional context-capture permissions. App works without them; they only
+            // enrich the analytical fields attached to each "like".
+            if (!locationGranted) {
+                item {
+                    PermissionCard(
+                        title = "（任意）位置情報を許可",
+                        body = "「いいね」した瞬間の場所・天気を一緒に記録できるようになります。許可しなくても本体機能は使えます。",
+                        actionLabel = "位置情報を許可する",
+                        onAction = {
+                            (context as? MainActivity)?.requestLocationPerm?.launch(
+                                Permissions.locationPermissions
+                            )
+                        }
+                    )
+                }
+            }
+            if (!activityGranted) {
+                item {
+                    PermissionCard(
+                        title = "（任意）身体活動を許可",
+                        body = "歩数・移動状態（静止／歩行／ランニング／乗車）を記録します。Android 10 以降で必要。",
+                        actionLabel = "身体活動を許可する",
+                        onAction = {
+                            (context as? MainActivity)?.requestActivityPerm?.launch(
+                                Permissions.activityRecognitionPermission
+                            )
+                        }
                     )
                 }
             }

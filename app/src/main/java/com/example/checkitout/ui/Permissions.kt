@@ -1,11 +1,15 @@
 package com.example.checkitout.ui
 
+import android.Manifest
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import android.text.TextUtils
+import androidx.core.content.ContextCompat
 import com.example.checkitout.service.MediaNotificationListener
 
 object Permissions {
@@ -41,4 +45,27 @@ object Permissions {
             }
         )
     }
+
+    // ──────────── Optional context-capture permissions ────────────
+    // The app works without any of these; they only enrich LikeContext.
+
+    fun isLocationGranted(context: Context): Boolean {
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+        return fine == PackageManager.PERMISSION_GRANTED || coarse == PackageManager.PERMISSION_GRANTED
+    }
+
+    fun isActivityRecognitionGranted(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true
+        return ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACTIVITY_RECOGNITION
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    val locationPermissions: Array<String> = arrayOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+    )
+
+    val activityRecognitionPermission: String = Manifest.permission.ACTIVITY_RECOGNITION
 }

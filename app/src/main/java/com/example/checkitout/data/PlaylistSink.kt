@@ -17,16 +17,30 @@ class LocalDbSink(private val context: Context) : PlaylistSink {
     override val id: String = "default"
     override val displayName: String = "ローカル保存"
 
+    /**
+     * Row id of the most recent successful insert. Used by the like flow to
+     * attach asynchronously-collected context (location, weather, audio
+     * features, etc.) after instant UI feedback has fired.
+     */
+    @Volatile var lastInsertedId: Long? = null
+        private set
+
     override suspend fun add(track: TrackInfo): Result<Unit> = runCatching {
-        AppDatabase.get(context).likedTrackDao().insert(
+        val id = AppDatabase.get(context).likedTrackDao().insert(
             LikedTrack(
                 title = track.title,
                 artist = track.artist,
                 album = track.album,
                 packageName = track.packageName,
                 likedAt = System.currentTimeMillis(),
-                playlist = id,
+                playlist = this.id,
+                positionMs = track.positionMs,
+                durationMs = track.durationMs,
+                positionPct = if (track.positionMs != null && track.durationMs != null && track.durationMs > 0)
+                    (track.positionMs.toFloat() / track.durationMs.toFloat()).coerceIn(0f, 1f)
+                else null,
             )
         )
+        lastInsertedId = id
     }.map { }
 }

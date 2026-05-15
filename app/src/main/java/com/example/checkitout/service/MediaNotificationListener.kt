@@ -94,12 +94,21 @@ class MediaNotificationListener : NotificationListenerService() {
         val artist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST)
             ?: metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
         val album = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM)
+        val durationMs = metadata.getLong(MediaMetadata.METADATA_KEY_DURATION).takeIf { it > 0 }
+        val positionMs = state?.let { s ->
+            val base = s.position
+            val elapsed = android.os.SystemClock.elapsedRealtime() - s.lastPositionUpdateTime
+            val rate = s.playbackSpeed.takeIf { it.isFinite() && it > 0f } ?: 1f
+            (base + (elapsed * rate).toLong()).coerceAtLeast(0L)
+        }
         val info = TrackInfo(
             title = title.trim(),
             artist = artist?.trim()?.takeIf { it.isNotEmpty() },
             album = album?.trim()?.takeIf { it.isNotEmpty() },
             packageName = c.packageName ?: "unknown",
             observedAt = System.currentTimeMillis(),
+            positionMs = positionMs,
+            durationMs = durationMs,
         )
         val app = applicationContext as CheckItOutApp
         app.container.recentBuffer.push(info)
