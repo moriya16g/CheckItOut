@@ -33,6 +33,12 @@ TTS で *「○○ を ローカル保存 に追加しました」* と読み上
 ### エクスポート
 ワンタップで **CSV** または **Markdown** にエクスポート。各行に Spotify / Apple Music / Last.fm の URL を含みます。
 
+### モーメントコンテキスト保存
+各「いいね」には、その瞬間の文脈も保存できます。時間帯、再生位置、音声出力経路（Bluetooth / 有線 / スピーカー）、場所ラベル、天気、移動状態、歩数、Spotify の audio-features、短い歌詞スニペットを **best-effort** で収集します。これらは「いいね」保存後に非同期で付与されるため、メイン操作は即時のままです。
+
+### ローカル分析画面
+アプリ内の **分析** タブでは、保存した「いいね」をその場で楽しめる形に可視化します。時間帯ヒストグラム、曜日×時刻ヒートマップ、ムード象限（valence × energy）、分布ドーナツ、Top アーティスト / 場所 / アプリ、さらに「ピーク時間帯」「週末のほうが元気な曲が多いか」「イントロ即決派かサビまで聴く派か」といったハイライトを自動生成します。
+
 ### 選択削除
 再生履歴バッファと「いいね」一覧の両方で、アプリ内から複数選択して削除できます。
 
@@ -40,7 +46,7 @@ TTS で *「○○ を ローカル保存 に追加しました」* と読み上
 Google Drive / Dropbox / OneDrive などの保存先に `checkitout_sync.json` を 1 つ作成または選択するだけです。CheckItOut はその JSON ファイルを直接読み書きするため、フォルダ選択に未対応のクラウドプロバイダでも使いやすくなっています。**WorkManager** がオフライン時に自動リトライ。手動の「いま同期」ボタンも用意しています。
 
 ### すべての「いいね」はユニークな瞬間
-同じ曲を何度いいねしてもOK。各「いいね」はそれぞれ独立したログエントリとして、固有のタイムスタンプ（将来的には位置・天気・気分も）と共に保持されます。同期エンジンは端末間でこれらをすべて保持し、重複として潰すことはありません。
+同じ曲を何度いいねしてもOK。各「いいね」はそれぞれ独立したログエントリとして、固有のタイムスタンプと、その瞬間のコンテキストを持って保持されます。同期エンジンは端末間でこれらをすべて保持し、重複として潰すことはありません。
 
 ### 拡張可能な保存先
 `PlaylistSink` はインターフェースです。MVP では `LocalDbSink`（Room）のみですが、Spotify Web API 書き込みや YouTube Music 連携などを 1 クラス追加するだけで全トリガーから自動的に呼ばれます。
@@ -75,9 +81,12 @@ app/src/main/java/com/example/checkitout/
 ├── CheckItOutApp.kt              # Application、AppContainer を保持
 ├── action/
 │   └── LikeAction.kt             # 全トリガー共通の「いいね」エントリポイント
+├── analytics/
+│   └── LikeAnalytics.kt          # ローカル集計とハイライト生成
 ├── data/
 │   ├── AppContainer.kt            # 手動 DI コンテナ
 │   ├── Database.kt                # Room エンティティ、DAO、データベース
+│   ├── LikeContext.kt             # 分析しやすいフラットなコンテキストスナップショット
 │   ├── PlaylistSink.kt            # Sink インターフェース + LocalDbSink
 │   ├── RecentBuffer.kt            # スレッドセーフなリングバッファ（猶予期間付き）
 │   └── TrackInfo.kt               # インメモリの曲スナップショットモデル
@@ -92,12 +101,22 @@ app/src/main/java/com/example/checkitout/
 │   ├── SyncManager.kt             # SAF の単一ドキュメント方式による JSON 読み書き + 双方向マージ
 │   └── SyncWorker.kt              # WorkManager ワーカー（オフラインリトライ付き）
 ├── ui/
-│   ├── MainActivity.kt            # Compose UI: 権限案内、バッファ表示、いいね一覧
+│   ├── AnalyticsScreen.kt         # Compose の分析ダッシュボード / 可視化
+│   ├── MainActivity.kt            # Compose UI: ホーム + 分析タブ
 │   └── Permissions.kt             # 権限チェック＆設定画面遷移ヘルパー
 ├── util/
 │   ├── Exporter.kt                # CSV / Markdown エクスポート（音楽リンク付き）
+│   ├── Http.kt                    # 最小限の blocking HTTP ヘルパー
 │   ├── MusicLinks.kt              # Spotify / Apple Music / Last.fm URL 生成
-│   └── Speaker.kt                 # TTS ラッパー
+│   ├── Speaker.kt                 # TTS ラッパー
+│   └── context/
+│       ├── LikeContextCollector.kt    # 全コンテキスト取得のオーケストレーター
+│       ├── LocationCollector.kt       # 最終既知位置の取得
+│       ├── LyricsCollector.kt         # lyrics.ovh から歌詞スニペット取得
+│       ├── ReverseGeoCollector.kt     # 逆ジオコーディングで場所ラベル化
+│       ├── SensorContextCollector.kt  # 移動状態・歩数・加速度
+│       ├── SpotifyCollector.kt        # Spotify audio-features 取得
+│       └── WeatherCollector.kt        # Open-Meteo の現在天気
 └── widget/
     └── LikeWidgetProvider.kt      # ホーム画面 / ロック画面ウィジェット
 ```
@@ -115,6 +134,13 @@ Android Studio で開く → Sync → Run。最小 SDK 26（Android 8.0）。
 1. **通知へのアクセス** — 設定 → 通知 → 通知へのアクセス → *CheckItOut* を有効にする
 
 アプリ起動時に未設定なら案内カードが表示されます。
+
+### より豊かなコンテキストのための任意権限
+
+- **位置情報** — 各「いいね」に場所ラベルと天気を付与します。
+- **身体活動** — Android 10 以降で、移動状態と歩数を付与します。
+
+許可しなくても、コアの「いいね」機能はそのまま使えます。未許可の項目だけ null のまま保存されます。
 
 ## トリガー一覧
 
@@ -147,10 +173,26 @@ Android Studio で開く → Sync → Run。最小 SDK 26（Android 8.0）。
 - DRM の厳しいアプリは MediaSession からタイトル/アーティストを出さないことがあります。
 - 端末メーカー独自のロック画面仕様により、通知アクションの見え方が変わることがあります。
 
+## 任意: Spotify audio-features
+
+各「いいね」に BPM / energy / valence / danceability / key / loudness を付けたい場合は、
+<https://developer.spotify.com/dashboard> で無料アプリを作成し、プロジェクトルートの
+`local.properties`（git 管理外）に以下を追加してください。
+
+```
+spotify.client.id=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+spotify.client.secret=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+未設定でも動作します。その場合は Spotify 関連列だけ null になります。時間・場所・天気・音声経路・活動・歌詞スニペットは通常どおり best-effort で収集されます。
+
 ## ロードマップ
 
-- **v0.2 "Moment Capture"** — 「いいね」と同時に位置情報・天気・活動・音声メモを保存
-- **v0.3 "Reflection"** — 週次プレイリスト自動生成（Spotify 書き込み対応）+ 30日後の再聴リマインド
+- **v0.2 "Moment Capture"** ✅ — 時間帯、位置、場所ラベル、天気、音声経路（BT/有線/スピーカー）、
+    活動状態（静止/歩行/走行/乗車）、歩数、Spotify audio-features（BPM/energy/valence/...）、
+    歌詞スニペットを非同期で収集し、各「いいね」行へ付与。
+    `LikedTrack` の列は、分析しやすいようフラットかつ nullable、バケット化済みの形で保持。
+- **v0.3 "Reflection"** 🚧 — オンデバイス分析ダッシュボードは実装済み。次は週次プレイリスト生成（Spotify 書き込み）と 30 日後の再聴リマインド
 - **v0.4 "Artist Bond"** — アーティスト深掘り画面・新譜アラート・近隣ライブ通知
 - **v0.5 "Lyric Snapshot"** — 「いいね」した瞬間の再生位置付近の歌詞を保存
 
