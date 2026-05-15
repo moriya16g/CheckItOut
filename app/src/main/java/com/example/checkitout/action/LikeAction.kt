@@ -5,6 +5,7 @@ import android.util.Log
 import com.example.checkitout.CheckItOutApp
 import com.example.checkitout.data.PlaylistSink
 import com.example.checkitout.data.TrackInfo
+import com.example.checkitout.util.Feedback
 import com.example.checkitout.util.Speaker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +37,7 @@ object LikeAction {
         if (track == null) {
             Log.w(TAG, "no track to like")
             Speaker.speakNoTrack(context)
+            Feedback.noTrack(context)
             return
         }
         val sinks = app.container.sinks
@@ -45,9 +47,11 @@ object LikeAction {
             if (firstOk != null) {
                 Log.i(TAG, "liked: ${track.displayName()} -> ${firstOk.first.displayName}")
                 Speaker.speakAdded(context, track, firstOk.first)
+                Feedback.success(context)
             } else {
                 Log.e(TAG, "all sinks failed: ${results.map { it.second.exceptionOrNull()?.message }}")
                 Speaker.speakNoTrack(context)
+                Feedback.failure(context)
             }
         }
     }

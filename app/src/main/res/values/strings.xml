@@ -2,8 +2,6 @@
 <resources>
     <string name="app_name">CheckItOut</string>
     <string name="notif_listener_label">CheckItOut Media Listener</string>
-    <string name="a11y_label">CheckItOut Volume Trigger</string>
-    <string name="a11y_description">音量ボタンの長押しで「いいね」を保存します。曲情報を画面オフのまま記録するために使います。</string>
     <string name="tile_label">いいね追加</string>
 
     <string name="channel_capture_name">再生中の曲を監視</string>

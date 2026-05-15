@@ -95,13 +95,11 @@ private fun MainScreen() {
 
     // Re-check permission flags on resume.
     var notifGranted by remember { mutableStateOf(Permissions.isNotificationListenerEnabled(context)) }
-    var a11yGranted by remember { mutableStateOf(Permissions.isAccessibilityEnabled(context)) }
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 notifGranted = Permissions.isNotificationListenerEnabled(context)
-                a11yGranted = Permissions.isAccessibilityEnabled(context)
             }
         }
         owner.lifecycle.addObserver(observer)
@@ -124,7 +122,7 @@ private fun MainScreen() {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (!notifGranted || !a11yGranted) {
+            if (!notifGranted) {
                 item {
                     PermissionCard(
                         title = "⚠ まず「制限付き設定を許可」してください",
@@ -134,24 +132,12 @@ private fun MainScreen() {
                         onAction = { Permissions.openAppDetailSettings(context) }
                     )
                 }
-            }
-            if (!notifGranted) {
                 item {
                     PermissionCard(
                         title = "通知アクセスを許可してください",
                         body = "再生中のアプリ（Spotify / YouTube Music など）から曲情報を取得するために必要です。",
                         actionLabel = "通知アクセス設定を開く",
                         onAction = { Permissions.openNotificationListenerSettings(context) }
-                    )
-                }
-            }
-            if (!a11yGranted) {
-                item {
-                    PermissionCard(
-                        title = "ユーザー補助を有効にしてください",
-                        body = "画面オフのまま音量ボタン長押しで「いいね」を保存するために使います。",
-                        actionLabel = "ユーザー補助設定を開く",
-                        onAction = { Permissions.openAccessibilitySettings(context) }
                     )
                 }
             }

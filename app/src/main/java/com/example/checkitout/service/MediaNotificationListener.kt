@@ -84,6 +84,7 @@ class MediaNotificationListener : NotificationListenerService() {
     }
 
     private fun publish(c: MediaController, metadata: MediaMetadata?, state: PlaybackState?) {
+        if (c.packageName == packageName) return // Never ingest CheckItOut's own MediaSession
         metadata ?: return
         val isPlaying = state?.state == PlaybackState.STATE_PLAYING
         if (!isPlaying) return // only record while actually playing
