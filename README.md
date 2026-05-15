@@ -35,8 +35,11 @@ Every saved track gets links to **Spotify**, **Apple Music**, and **Last.fm**. T
 ### Export
 One-tap **CSV** or **Markdown** export with Spotify / Apple Music / Last.fm URLs included in every row.
 
+### Selection Delete
+Both the recent-playback buffer and the liked-song list support multi-select deletion from the app UI.
+
 ### Cross-Device Sync
-Pick any folder synced by Google Drive, Dropbox, or OneDrive. CheckItOut writes a JSON file there; the cloud app handles the rest. **WorkManager** automatically retries when offline — or hit the manual "Sync now" button.
+Pick or create a single `checkitout_sync.json` file in Google Drive, Dropbox, OneDrive, or another SAF-backed provider. CheckItOut reads and writes that file directly, which works even with providers that do not expose folder-tree selection. **WorkManager** automatically retries when offline — or hit the manual "Sync now" button.
 
 ### Every Like Is a Unique Moment
 Liking the same song twice is intentional, not a bug. Each "like" is a separate log entry with its own timestamp (and, in future versions, location / weather / mood). The sync engine preserves every entry across devices — it never collapses duplicates.
@@ -63,7 +66,7 @@ MediaNotificationListener ──push──▶ RecentBuffer (last 10 tracks)
   └─ In-app button         (Compose UI)
        │
        ▼
-    LikeAction ──▶ PlaylistSink(s) ──▶ Room DB ──sync──▶ JSON file (cloud folder)
+    LikeAction ──▶ PlaylistSink(s) ──▶ Room DB ──sync──▶ JSON file (single cloud/local document)
        │
        └──▶ TTS "Added ○○"
 ```
@@ -90,7 +93,7 @@ app/src/main/java/com/example/checkitout/
 │   ├── MediaNotificationListener.kt  # Reads MediaSession from any player
 │   └── VolumeKeyAccessibilityService.kt  # Volume long-press (screen off)
 ├── sync/
-│   ├── SyncManager.kt             # SAF-based JSON read/write + bidirectional merge
+│   ├── SyncManager.kt             # SAF document-based JSON read/write + bidirectional merge
 │   └── SyncWorker.kt              # WorkManager worker with offline retry
 ├── ui/
 │   ├── MainActivity.kt            # Compose UI: permissions, buffer, liked list
@@ -132,14 +135,15 @@ The app shows guidance cards on launch if either permission is missing.
 
 ### Cross-Device Sync
 
-1. In the app, tap **"同期フォルダを選択"** (Select sync folder)
-2. Choose a folder managed by Google Drive / Dropbox / OneDrive
-3. CheckItOut creates `checkitout_sync.json` in that folder
-4. Other devices pointing to the same folder will merge automatically
+1. In the app, tap **"新規ファイルを作成"** or **"既存ファイルを選択"**
+2. In the picker, choose Google Drive / Dropbox / OneDrive or another document provider
+3. Create or select `checkitout_sync.json`
+4. Other devices pointing to the same file will merge automatically
 
 | Aspect | Detail |
 |---|---|
 | Merge strategy | Union by `syncId` (title + artist + ms-timestamp). Each like is unique |
+| Storage model | Single JSON document selected through SAF (`CreateDocument` / `OpenDocument`) |
 | Background sync | WorkManager, every 1 hour, requires network |
 | Offline | Queued with exponential back-off; auto-retries on reconnect |
 | Manual | "Sync now" button for immediate push/pull |

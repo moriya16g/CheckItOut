@@ -55,4 +55,15 @@ class RecentBuffer(private val capacity: Int = 10) {
     fun at(index: Int): TrackInfo? = synchronized(lock) {
         deque.toList().getOrNull(index)
     }
+
+    /** Removes the matching tracks from the buffer. */
+    fun removeAll(tracks: Collection<TrackInfo>) {
+        if (tracks.isEmpty()) return
+        synchronized(lock) {
+            val targets = tracks.toSet()
+            if (deque.removeAll(targets)) {
+                _state.value = deque.toList()
+            }
+        }
+    }
 }

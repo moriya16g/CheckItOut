@@ -35,8 +35,11 @@ TTS で *「○○ を ローカル保存 に追加しました」* と読み上
 ### エクスポート
 ワンタップで **CSV** または **Markdown** にエクスポート。各行に Spotify / Apple Music / Last.fm の URL を含みます。
 
+### 選択削除
+再生履歴バッファと「いいね」一覧の両方で、アプリ内から複数選択して削除できます。
+
 ### 端末間同期
-Google Drive / Dropbox / OneDrive が同期しているフォルダを選ぶだけ。CheckItOut が JSON ファイルを書き出し、クラウドアプリが残りをやってくれます。**WorkManager** がオフライン時に自動リトライ。手動の「いま同期」ボタンも用意しています。
+Google Drive / Dropbox / OneDrive などの保存先に `checkitout_sync.json` を 1 つ作成または選択するだけです。CheckItOut はその JSON ファイルを直接読み書きするため、フォルダ選択に未対応のクラウドプロバイダでも使いやすくなっています。**WorkManager** がオフライン時に自動リトライ。手動の「いま同期」ボタンも用意しています。
 
 ### すべての「いいね」はユニークな瞬間
 同じ曲を何度いいねしてもOK。各「いいね」はそれぞれ独立したログエントリとして、固有のタイムスタンプ（将来的には位置・天気・気分も）と共に保持されます。同期エンジンは端末間でこれらをすべて保持し、重複として潰すことはありません。
@@ -63,7 +66,7 @@ MediaNotificationListener ──push──▶ RecentBuffer (直近10曲)
   └─ アプリ内ボタン       (Compose UI)
        │
        ▼
-    LikeAction ──▶ PlaylistSink(s) ──▶ Room DB ──sync──▶ JSON ファイル (クラウドフォルダ)
+    LikeAction ──▶ PlaylistSink(s) ──▶ Room DB ──sync──▶ JSON ファイル (単一ドキュメント)
        │
        └──▶ TTS 「○○を追加しました」
 ```
@@ -90,7 +93,7 @@ app/src/main/java/com/example/checkitout/
 │   ├── MediaNotificationListener.kt  # 任意プレイヤーの MediaSession を読み取り
 │   └── VolumeKeyAccessibilityService.kt  # 音量キー長押し（画面オフ対応）
 ├── sync/
-│   ├── SyncManager.kt             # SAF ベースの JSON 読み書き + 双方向マージ
+│   ├── SyncManager.kt             # SAF の単一ドキュメント方式による JSON 読み書き + 双方向マージ
 │   └── SyncWorker.kt              # WorkManager ワーカー（オフラインリトライ付き）
 ├── ui/
 │   ├── MainActivity.kt            # Compose UI: 権限案内、バッファ表示、いいね一覧
@@ -132,14 +135,15 @@ Android Studio で開く → Sync → Run。最小 SDK 26（Android 8.0）。
 
 ## 端末間同期
 
-1. アプリ内で **「同期フォルダを選択」** をタップ
-2. Google Drive / Dropbox / OneDrive が管理するフォルダを選ぶ
-3. CheckItOut が `checkitout_sync.json` をそのフォルダに作成
-4. 同じフォルダを指す別の端末が自動的にマージ
+1. アプリ内で **「新規ファイルを作成」** または **「既存ファイルを選択」** をタップ
+2. ピッカーで Google Drive / Dropbox / OneDrive などの保存先を選ぶ
+3. `checkitout_sync.json` を作成または選択する
+4. 同じファイルを指す別の端末が自動的にマージ
 
 | 項目 | 詳細 |
 |---|---|
 | マージ戦略 | `syncId`（タイトル＋アーティスト＋ミリ秒タイムスタンプ）による和集合。各いいねはユニーク |
+| 保存モデル | SAF の単一ドキュメント選択（`CreateDocument` / `OpenDocument`） |
 | バックグラウンド同期 | WorkManager、1時間ごと、ネットワーク必須 |
 | オフライン | 指数バックオフでキューイング。接続回復時に自動リトライ |
 | 手動 | 「いま同期」ボタンで即時プッシュ/プル |

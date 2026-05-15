@@ -13,40 +13,44 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Manages bi-directional sync of liked tracks through a JSON file stored in a
- * user-chosen folder (which may be on Google Drive, Dropbox, OneDrive, etc.).
+ * Manages bi-directional sync of liked tracks through a single JSON file
+ * stored on a user-chosen location (which may be on Google Drive, Dropbox,
+ * OneDrive, local storage, etc.).
+ *
+ * The user picks the file directly via the Storage Access Framework's
+ * single-document picker (ACTION_CREATE_DOCUMENT for new, ACTION_OPEN_DOCUMENT
+ * for existing). This works with cloud providers that do not implement the
+ * tree (folder) document API.
  *
  * ## Sync algorithm
  * 1. Read the remote JSON file (array of track objects keyed by `syncId`).
  * 2. Merge: any `syncId` that exists remotely but not locally -> insert into DB.
  * 3. Any `syncId` that exists locally but not remotely -> add to the JSON set.
  * 4. Write the merged JSON back to the file.
- *
- * The cloud provider's own sync client then pushes the file to the cloud.
  */
 object SyncManager {
     private const val TAG = "SyncManager"
-    private const val SYNC_FILE_NAME = "checkitout_sync.json"
+    const val SYNC_FILE_NAME = "checkitout_sync.json"
     private const val PREFS_NAME = "sync_prefs"
-    private const val KEY_FOLDER_URI = "sync_folder_uri"
+    private const val KEY_FILE_URI = "sync_file_uri"
     private const val KEY_LAST_SYNC = "last_sync_millis"
 
-    // ──────────────────────── SAF folder persistence ────────────────────────
+    // ──────────────────────── SAF file persistence ────────────────────────
 
-    fun getSavedFolderUri(context: Context): Uri? {
-        val raw = prefs(context).getString(KEY_FOLDER_URI, null) ?: return null
+    fun getSavedFileUri(context: Context): Uri? {
+        val raw = prefs(context).getString(KEY_FILE_URI, null) ?: return null
         return Uri.parse(raw)
     }
 
-    fun saveFolderUri(context: Context, uri: Uri) {
+    fun saveFileUri(context: Context, uri: Uri) {
         // Take persistable permission so the URI survives reboots.
         val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
         runCatching { context.contentResolver.takePersistableUriPermission(uri, flags) }
-        prefs(context).edit().putString(KEY_FOLDER_URI, uri.toString()).apply()
+        prefs(context).edit().putString(KEY_FILE_URI, uri.toString()).apply()
     }
 
-    fun clearFolderUri(context: Context) {
-        prefs(context).edit().remove(KEY_FOLDER_URI).remove(KEY_LAST_SYNC).apply()
+    fun clearFileUri(context: Context) {
+        prefs(context).edit().remove(KEY_FILE_URI).remove(KEY_LAST_SYNC).apply()
     }
 
     fun getLastSyncTime(context: Context): Long =
@@ -59,14 +63,11 @@ object SyncManager {
      * Throws on I/O errors so the caller (WorkManager) can retry.
      */
     suspend fun sync(context: Context): Int = withContext(Dispatchers.IO) {
-        val folderUri = getSavedFolderUri(context)
-            ?: throw IllegalStateException("No sync folder configured")
+        val fileUri = getSavedFileUri(context)
+            ?: throw IllegalStateException("No sync file configured")
         val dao = AppDatabase.get(context).likedTrackDao()
 
-        // 1. Resolve or create the sync file inside the chosen folder
-        val fileUri = resolveOrCreateFile(context, folderUri)
-
-        // 2. Read existing remote data
+        // 1. Read existing remote data (treat empty/missing as empty array)
         val remoteJson = readJsonArray(context, fileUri)
         val remoteMap = mutableMapOf<String, JSONObject>()
         for (i in 0 until remoteJson.length()) {
@@ -107,23 +108,16 @@ object SyncManager {
 
     // ──────────────────────── SAF helpers ────────────────────────
 
-    private fun resolveOrCreateFile(context: Context, folderUri: Uri): Uri {
-        val resolver = context.contentResolver
-        val treeUri = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, folderUri)
-            ?: throw IllegalStateException("Cannot open folder: $folderUri")
-        val existing = treeUri.findFile(SYNC_FILE_NAME)
-        if (existing != null && existing.isFile) return existing.uri
-        val created = treeUri.createFile("application/json", SYNC_FILE_NAME)
-            ?: throw IllegalStateException("Cannot create $SYNC_FILE_NAME in $folderUri")
-        // Initialize with empty array
-        resolver.openOutputStream(created.uri, "wt")?.use { it.write("[]".toByteArray()) }
-        return created.uri
-    }
-
     private fun readJsonArray(context: Context, fileUri: Uri): JSONArray {
-        val text = context.contentResolver.openInputStream(fileUri)?.use {
-            it.bufferedReader(Charsets.UTF_8).readText()
-        } ?: "[]"
+        val text = try {
+            context.contentResolver.openInputStream(fileUri)?.use {
+                it.bufferedReader(Charsets.UTF_8).readText()
+            } ?: "[]"
+        } catch (e: Exception) {
+            // File may have been newly created and is still empty/invalid.
+            Log.w(TAG, "read failed, treating as empty: ${e.message}")
+            "[]"
+        }
         return if (text.isBlank()) JSONArray() else JSONArray(text)
     }
 

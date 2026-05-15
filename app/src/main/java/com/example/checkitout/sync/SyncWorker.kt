@@ -64,7 +64,7 @@ class SyncWorker(
 
         /** Start periodic background sync (every 1 hour). */
         fun enqueuePeriodicIfConfigured(context: Context) {
-            if (SyncManager.getSavedFolderUri(context) == null) {
+            if (SyncManager.getSavedFileUri(context) == null) {
                 WorkManager.getInstance(context).cancelUniqueWork(PERIODIC_WORK_NAME)
                 return
             }

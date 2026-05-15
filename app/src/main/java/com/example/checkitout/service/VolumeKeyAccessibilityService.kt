@@ -2,6 +2,8 @@ package com.example.checkitout.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
@@ -21,8 +23,9 @@ import com.example.checkitout.action.LikeAction
  */
 class VolumeKeyAccessibilityService : AccessibilityService() {
 
-    private var downStart: Long = 0
+    private val handler = Handler(Looper.getMainLooper())
     private var triggered = false
+    private var pendingLongPress: Runnable? = null
 
     // Triple-press detection (either key)
     private val tripleWindowMs = 800L
@@ -47,20 +50,17 @@ class VolumeKeyAccessibilityService : AccessibilityService() {
         when (event.action) {
             KeyEvent.ACTION_DOWN -> {
                 if (event.repeatCount == 0) {
-                    downStart = SystemClock.uptimeMillis()
                     triggered = false
-                    recordPress(downStart)
-                } else if (!triggered && code == KeyEvent.KEYCODE_VOLUME_DOWN) {
-                    val held = SystemClock.uptimeMillis() - downStart
-                    if (held >= LONG_PRESS_MS) {
-                        triggered = true
-                        Log.i(TAG, "volume long-press -> like")
-                        LikeAction.trigger(applicationContext, historyIndex = 0)
+                    recordPress(SystemClock.uptimeMillis())
+                    if (code == KeyEvent.KEYCODE_VOLUME_DOWN) {
+                        scheduleLongPress()
                     }
                 }
             }
             KeyEvent.ACTION_UP -> {
+                cancelLongPress()
                 if (triggered) {
+                    triggered = false
                     // we consumed the long-press, swallow this key entirely
                     return true
                 }
@@ -70,6 +70,22 @@ class VolumeKeyAccessibilityService : AccessibilityService() {
         return false
     }
 
+    private fun scheduleLongPress() {
+        cancelLongPress()
+        val r = Runnable {
+            triggered = true
+            Log.i(TAG, "volume long-press -> like")
+            LikeAction.trigger(applicationContext, historyIndex = 0)
+        }
+        pendingLongPress = r
+        handler.postDelayed(r, LONG_PRESS_MS)
+    }
+
+    private fun cancelLongPress() {
+        pendingLongPress?.let { handler.removeCallbacks(it) }
+        pendingLongPress = null
+    }
+
     private fun recordPress(now: Long) {
         pressTimestamps.addLast(now)
         while (pressTimestamps.isNotEmpty() && now - pressTimestamps.first() > tripleWindowMs) {
@@ -77,9 +93,16 @@ class VolumeKeyAccessibilityService : AccessibilityService() {
         }
         if (pressTimestamps.size >= 3) {
             pressTimestamps.clear()
+            cancelLongPress()
+            triggered = false
             Log.i(TAG, "volume triple-press -> like previous")
             LikeAction.trigger(applicationContext, historyIndex = 1)
         }
+    }
+
+    override fun onDestroy() {
+        cancelLongPress()
+        super.onDestroy()
     }
 
     companion object {

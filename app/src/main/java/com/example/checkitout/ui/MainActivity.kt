@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -47,6 +48,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.example.checkitout.CheckItOutApp
 import com.example.checkitout.action.LikeAction
 import com.example.checkitout.data.LikedTrack
+import com.example.checkitout.data.TrackInfo
 import com.example.checkitout.service.CaptureService
 import com.example.checkitout.sync.SyncManager
 import com.example.checkitout.sync.SyncWorker
@@ -89,6 +91,7 @@ class MainActivity : ComponentActivity() {
 private fun MainScreen() {
     val context = LocalContext.current
     val app = context.applicationContext as CheckItOutApp
+    val scope = rememberCoroutineScope()
 
     // Re-check permission flags on resume.
     var notifGranted by remember { mutableStateOf(Permissions.isNotificationListenerEnabled(context)) }
@@ -108,84 +111,201 @@ private fun MainScreen() {
     val recent by app.container.recentBuffer.state.collectAsState()
     val likedFlow: Flow<List<LikedTrack>> = remember { app.container.db.likedTrackDao().observeAll() }
     val liked by likedFlow.collectAsState(initial = emptyList())
+    var recentSelectionMode by remember { mutableStateOf(false) }
+    var likedSelectionMode by remember { mutableStateOf(false) }
+    var selectedRecent by remember { mutableStateOf(setOf<TrackInfo>()) }
+    var selectedLikedIds by remember { mutableStateOf(setOf<Long>()) }
 
     Scaffold { inner ->
-        Column(
-            Modifier
+        LazyColumn(
+            modifier = Modifier
                 .padding(inner)
-                .padding(16.dp)
-                .fillMaxSize()
+                .fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (!notifGranted || !a11yGranted) {
-                PermissionCard(
-                    title = "⚠ まず「制限付き設定を許可」してください",
-                    body = "サイドロード（Play Store 以外）でインストールした場合、" +
-                            "先にアプリ情報画面の ⋮ →「制限付き設定を許可」が必要です。",
-                    actionLabel = "アプリ情報を開く",
-                    onAction = { Permissions.openAppDetailSettings(context) }
-                )
-                Spacer(Modifier.height(12.dp))
+                item {
+                    PermissionCard(
+                        title = "⚠ まず「制限付き設定を許可」してください",
+                        body = "サイドロード（Play Store 以外）でインストールした場合、" +
+                                "先にアプリ情報画面の ⋮ →「制限付き設定を許可」が必要です。",
+                        actionLabel = "アプリ情報を開く",
+                        onAction = { Permissions.openAppDetailSettings(context) }
+                    )
+                }
             }
             if (!notifGranted) {
-                PermissionCard(
-                    title = "通知アクセスを許可してください",
-                    body = "再生中のアプリ（Spotify / YouTube Music など）から曲情報を取得するために必要です。",
-                    actionLabel = "通知アクセス設定を開く",
-                    onAction = { Permissions.openNotificationListenerSettings(context) }
-                )
-                Spacer(Modifier.height(12.dp))
+                item {
+                    PermissionCard(
+                        title = "通知アクセスを許可してください",
+                        body = "再生中のアプリ（Spotify / YouTube Music など）から曲情報を取得するために必要です。",
+                        actionLabel = "通知アクセス設定を開く",
+                        onAction = { Permissions.openNotificationListenerSettings(context) }
+                    )
+                }
             }
             if (!a11yGranted) {
-                PermissionCard(
-                    title = "ユーザー補助を有効にしてください",
-                    body = "画面オフのまま音量ボタン長押しで「いいね」を保存するために使います。",
-                    actionLabel = "ユーザー補助設定を開く",
-                    onAction = { Permissions.openAccessibilitySettings(context) }
+                item {
+                    PermissionCard(
+                        title = "ユーザー補助を有効にしてください",
+                        body = "画面オフのまま音量ボタン長押しで「いいね」を保存するために使います。",
+                        actionLabel = "ユーザー補助設定を開く",
+                        onAction = { Permissions.openAccessibilitySettings(context) }
+                    )
+                }
+            }
+
+            item {
+                Column {
+                    Button(
+                        onClick = { LikeAction.trigger(context, 0) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("いま流れている曲を「いいね」") }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { LikeAction.trigger(context, 1) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("ひとつ前の曲を「いいね」") }
+                }
+            }
+
+            item { SyncSection() }
+
+            item {
+                Column {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("再生履歴バッファ（新しい順）", style = MaterialTheme.typography.titleMedium)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (recentSelectionMode) {
+                                if (selectedRecent.isNotEmpty()) {
+                                    TextButton(onClick = {
+                                        app.container.recentBuffer.removeAll(selectedRecent)
+                                        selectedRecent = emptySet<TrackInfo>()
+                                        recentSelectionMode = false
+                                        toast(context, "再生履歴を削除しました")
+                                    }) {
+                                        Text("削除")
+                                    }
+                                }
+                                TextButton(onClick = {
+                                    selectedRecent = emptySet<TrackInfo>()
+                                    recentSelectionMode = false
+                                }) {
+                                    Text("キャンセル")
+                                }
+                            } else if (recent.isNotEmpty()) {
+                                TextButton(onClick = { recentSelectionMode = true }) {
+                                    Text("選択")
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    if (recent.isEmpty()) {
+                        Text("まだ曲を検出していません。プレイヤーで再生を開始してください。")
+                    } else {
+                        recent.forEachIndexed { i, t ->
+                            SelectableRecentRow(
+                                index = i,
+                                track = t,
+                                selectionMode = recentSelectionMode,
+                                selected = t in selectedRecent,
+                                onSelectedChange = { checked ->
+                                    selectedRecent = if (checked) selectedRecent + t else selectedRecent - t
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("いいねした曲 (${liked.size})", style = MaterialTheme.typography.titleMedium)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (likedSelectionMode) {
+                                if (selectedLikedIds.isNotEmpty()) {
+                                    TextButton(onClick = {
+                                        val ids = selectedLikedIds.toList()
+                                        scope.launch {
+                                            app.container.db.likedTrackDao().deleteMany(ids)
+                                            toast(context, "いいねを削除しました")
+                                        }
+                                        selectedLikedIds = emptySet<Long>()
+                                        likedSelectionMode = false
+                                    }) {
+                                        Text("削除")
+                                    }
+                                }
+                                TextButton(onClick = {
+                                    selectedLikedIds = emptySet<Long>()
+                                    likedSelectionMode = false
+                                }) {
+                                    Text("キャンセル")
+                                }
+                            } else if (liked.isNotEmpty()) {
+                                TextButton(onClick = { likedSelectionMode = true }) {
+                                    Text("選択")
+                                }
+                            }
+                        }
+                    }
+                    ExportButtons(liked)
+                }
+            }
+
+            items(liked, key = { it.id }) { row ->
+                LikedRow(
+                    row = row,
+                    selectionMode = likedSelectionMode,
+                    selected = row.id in selectedLikedIds,
+                    onSelectedChange = { checked ->
+                        selectedLikedIds = if (checked) {
+                            selectedLikedIds + row.id
+                        } else {
+                            selectedLikedIds - row.id
+                        }
+                    }
                 )
-                Spacer(Modifier.height(12.dp))
             }
 
-            Button(
-                onClick = { LikeAction.trigger(context, 0) },
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("いま流れている曲を「いいね」") }
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = { LikeAction.trigger(context, 1) },
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("ひとつ前の曲を「いいね」") }
+            item { Spacer(Modifier.height(16.dp)) }
+        }
+    }
+}
 
-            Spacer(Modifier.height(16.dp))
-            SyncSection()
-
-            Spacer(Modifier.height(16.dp))
-            Text("再生履歴バッファ（新しい順）", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(4.dp))
-            if (recent.isEmpty()) {
-                Text("まだ曲を検出していません。プレイヤーで再生を開始してください。")
-            } else {
-                recent.forEachIndexed { i, t ->
-                    Text("${i}. ${t.displayName()}  (${t.packageName})")
-                }
+@Composable
+private fun SelectableRecentRow(
+    index: Int,
+    track: com.example.checkitout.data.TrackInfo,
+    selectionMode: Boolean,
+    selected: Boolean,
+    onSelectedChange: (Boolean) -> Unit,
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (selectionMode) {
+                Checkbox(checked = selected, onCheckedChange = onSelectedChange)
             }
-
-            Spacer(Modifier.height(16.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("いいねした曲 (${liked.size})", style = MaterialTheme.typography.titleMedium)
-                ExportButtons(liked)
-            }
-            Spacer(Modifier.height(4.dp))
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                contentPadding = PaddingValues(bottom = 32.dp)
-            ) {
-                items(liked, key = { it.id }) { row ->
-                    LikedRow(row)
-                }
+            Column(Modifier.weight(1f)) {
+                Text("${index}. ${track.displayName()}", style = MaterialTheme.typography.bodyLarge)
+                Text(track.packageName, style = MaterialTheme.typography.bodySmall)
             }
         }
     }
@@ -238,28 +358,43 @@ private fun toast(context: android.content.Context, msg: String) {
 private fun SyncSection() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var folderUri by remember { mutableStateOf(SyncManager.getSavedFolderUri(context)) }
+    var fileUri by remember { mutableStateOf(SyncManager.getSavedFileUri(context)) }
     var syncing by remember { mutableStateOf(false) }
-    val lastSync = remember(folderUri) { SyncManager.getLastSyncTime(context) }
+    val lastSync = remember(fileUri) { SyncManager.getLastSyncTime(context) }
     val df = remember { SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()) }
 
-    val folderPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocumentTree()
+    val createPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        SyncManager.saveFolderUri(context, uri)
-        folderUri = uri
+        SyncManager.saveFileUri(context, uri)
+        fileUri = uri
+        // Initialize file with empty array if it's empty.
+        runCatching {
+            context.contentResolver.openOutputStream(uri, "wt")?.use {
+                it.write("[]".toByteArray())
+            }
+        }
         SyncWorker.enqueuePeriodicIfConfigured(context)
-        toast(context, "同期フォルダを設定しました")
+        toast(context, "同期ファイルを作成しました")
+    }
+    val openPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        SyncManager.saveFileUri(context, uri)
+        fileUri = uri
+        SyncWorker.enqueuePeriodicIfConfigured(context)
+        toast(context, "既存の同期ファイルを設定しました")
     }
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
             Text("端末間同期", style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(4.dp))
-            if (folderUri != null) {
+            if (fileUri != null) {
                 Text(
-                    "同期先: ${folderUri?.lastPathSegment ?: "設定済み"}",
+                    "同期ファイル: ${fileUri?.lastPathSegment ?: "設定済み"}",
                     style = MaterialTheme.typography.bodySmall
                 )
                 if (lastSync > 0) {
@@ -284,25 +419,29 @@ private fun SyncSection() {
                             }
                         }
                     ) { Text(if (syncing) "同期中…" else "いま同期") }
-                    OutlinedButton(onClick = {
-                        folderPicker.launch(null)
-                    }) { Text("フォルダ変更") }
                     TextButton(onClick = {
-                        SyncManager.clearFolderUri(context)
+                        SyncManager.clearFileUri(context)
                         SyncWorker.cancelPeriodic(context)
-                        folderUri = null
+                        fileUri = null
                         toast(context, "同期を解除しました")
                     }) { Text("解除") }
                 }
             } else {
                 Text(
-                    "Google Drive / Dropbox / OneDrive のフォルダを選ぶと、" +
-                            "いいねリストが端末間で自動同期されます。",
+                    "同期用 JSON ファイルを Google Drive / Dropbox / OneDrive 等の" +
+                            "クラウド同期フォルダ内に作成すると、いいねリストが端末間で" +
+                            "自動同期されます。\n" +
+                            "（保存場所選択画面の左上 ☰ メニューからクラウドプロバイダを選べます）",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = { folderPicker.launch(null) }) {
-                    Text("同期フォルダを選択")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { createPicker.launch(SyncManager.SYNC_FILE_NAME) }) {
+                        Text("新規ファイルを作成")
+                    }
+                    OutlinedButton(onClick = { openPicker.launch(arrayOf("application/json", "*/*")) }) {
+                        Text("既存ファイルを選択")
+                    }
                 }
             }
         }
@@ -328,41 +467,57 @@ private fun PermissionCard(
 }
 
 @Composable
-private fun LikedRow(row: LikedTrack) {
+private fun LikedRow(
+    row: LikedTrack,
+    selectionMode: Boolean,
+    selected: Boolean,
+    onSelectedChange: (Boolean) -> Unit,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val df = remember { SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()) }
     var resolvingApple by remember(row.id) { mutableStateOf(false) }
 
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(10.dp)) {
-            val name = if (!row.artist.isNullOrBlank()) "${row.artist} - ${row.title}" else row.title
-            Text(name, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                "${df.format(Date(row.likedAt))}  /  ${row.packageName}",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                TextButton(onClick = { MusicLinks.open(context, MusicLinks.spotifySearchUrl(row)) }) {
-                    Text("Spotify")
-                }
-                TextButton(
-                    enabled = !resolvingApple,
-                    onClick = {
-                        resolvingApple = true
-                        scope.launch {
-                            val url = MusicLinks.resolveAppleMusic(row)
-                            resolvingApple = false
-                            if (url != null) MusicLinks.open(context, url)
-                            else toast(context, "Apple Music で見つかりませんでした")
-                        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (selectionMode) {
+                Checkbox(checked = selected, onCheckedChange = onSelectedChange)
+            }
+            Column(Modifier.weight(1f)) {
+                val name = if (!row.artist.isNullOrBlank()) "${row.artist} - ${row.title}" else row.title
+                Text(name, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "${df.format(Date(row.likedAt))}  /  ${row.packageName}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    TextButton(onClick = { MusicLinks.open(context, MusicLinks.spotifySearchUrl(row)) }) {
+                        Text("Spotify")
                     }
-                ) { Text(if (resolvingApple) "Apple Music…" else "Apple Music") }
-                TextButton(onClick = { MusicLinks.open(context, MusicLinks.lastFmUrl(row)) }) {
-                    Text("Last.fm")
+                    TextButton(
+                        enabled = !resolvingApple,
+                        onClick = {
+                            resolvingApple = true
+                            scope.launch {
+                                val url = MusicLinks.resolveAppleMusic(row)
+                                resolvingApple = false
+                                if (url != null) MusicLinks.open(context, url)
+                                else toast(context, "Apple Music で見つかりませんでした")
+                            }
+                        }
+                    ) { Text(if (resolvingApple) "Apple Music…" else "Apple Music") }
+                    TextButton(onClick = { MusicLinks.open(context, MusicLinks.lastFmUrl(row)) }) {
+                        Text("Last.fm")
+                    }
                 }
             }
         }

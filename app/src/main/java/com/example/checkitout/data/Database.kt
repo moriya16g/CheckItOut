@@ -57,6 +57,9 @@ interface LikedTrackDao {
 
     @Query("DELETE FROM liked_tracks WHERE id = :id")
     suspend fun delete(id: Long)
+
+    @Query("DELETE FROM liked_tracks WHERE id IN (:ids)")
+    suspend fun deleteMany(ids: List<Long>)
 }
 
 @Database(entities = [LikedTrack::class], version = 3, exportSchema = false)
