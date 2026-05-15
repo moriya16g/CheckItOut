@@ -13,8 +13,6 @@ CheckItOut runs silently in the background, captures what's playing from **any**
 ## Key Features
 
 ### Instant Capture, Zero Friction
-- **Volume-down long press** (0.7s) — save the current song, screen off
-- **Volume key triple-press** — save the *previous* song (missed-it recovery)
 - **Headset triple-click** — same, hands-free
 - **Quick Settings tile** — one tap from the notification shade
 - **Lock-screen notification buttons** — visible without unlock
@@ -24,7 +22,7 @@ CheckItOut runs silently in the background, captures what's playing from **any**
 Uses Android's `MediaSessionManager` + `NotificationListenerService` to read structured metadata from whatever app is playing. No scraping, no hacks.
 
 ### "Oops, the Song Changed" Protection
-A ring buffer holds the last 10 tracks. When you press the button, `RecentBuffer.bestCandidate()` checks whether the song *just* switched (< 3 seconds ago) and automatically picks the **previous** one. You can also manually go back with triple-press or the in-app "previous" button.
+A ring buffer holds the last 10 tracks. When you press the button, `RecentBuffer.bestCandidate()` checks whether the song *just* switched (< 3 seconds ago) and automatically picks the **previous** one. You can also manually go back with the lock-screen / widget "previous" action or the in-app "previous" button.
 
 ### Voice Feedback
 TTS announces *"Added {track} to {playlist}"* so you never need to look at the screen.
@@ -58,7 +56,6 @@ MediaNotificationListener ──push──▶ RecentBuffer (last 10 tracks)
                                           │
   ┌───────────────────────────────────────┘
   │
-  ├─ Volume long-press     (AccessibilityService)
   ├─ Headset triple-click  (MediaButtonReceiver)
   ├─ Quick Settings tile   (TileService)
   ├─ Lock-screen notif     (Notification action → LikeReceiver)
@@ -90,8 +87,7 @@ app/src/main/java/com/example/checkitout/
 │   ├── HeadsetButtonReceiver.kt   # Bluetooth/wired headset triple-click
 │   ├── LikeReceiver.kt            # Broadcast receiver for notif/widget actions
 │   ├── LikeTileService.kt         # Quick Settings tile
-│   ├── MediaNotificationListener.kt  # Reads MediaSession from any player
-│   └── VolumeKeyAccessibilityService.kt  # Volume long-press (screen off)
+│   └── MediaNotificationListener.kt  # Reads MediaSession from any player
 ├── sync/
 │   ├── SyncManager.kt             # SAF document-based JSON read/write + bidirectional merge
 │   └── SyncWorker.kt              # WorkManager worker with offline retry
@@ -112,21 +108,18 @@ app/src/main/java/com/example/checkitout/
 
 Open in Android Studio → Sync → Run. Min SDK 26 (Android 8.0).
 
-### First Launch (two permissions required)
+### First Launch (permission required)
 
-> **On Android 13+ sideloaded installs**, you must first go to **Settings → Apps → CheckItOut → ⋮ → "Allow restricted settings"** before enabling these.
+> **On Android 13+ sideloaded installs**, you may need to go to **Settings → Apps → CheckItOut → ⋮ → "Allow restricted settings"** before enabling Notification access.
 
 1. **Notification access** — Settings → Notifications → Notification access → enable *CheckItOut*
-2. **Accessibility service** — Settings → Accessibility → *CheckItOut Volume Trigger* → enable
 
-The app shows guidance cards on launch if either permission is missing.
+The app shows guidance cards on launch if this permission is missing.
 
 ## Trigger Reference
 
 | Trigger | Gesture | What it saves |
 |---|---|---|
-| Volume ↓ long-press (0.7s) | Hold volume-down | Current / smart-recent track |
-| Volume key triple-press | 3 presses within 0.8s | Previous track |
 | Headset button triple-click | 3 clicks within 0.9s | Current / smart-recent track |
 | Quick Settings tile | Tap tile | Current / smart-recent track |
 | Lock-screen notification | Tap "👍" or "Previous" | Current or previous track |
@@ -150,9 +143,9 @@ The app shows guidance cards on launch if either permission is missing.
 
 ## Known Limitations
 
-- Headset button may be intercepted by the music player; volume long-press and QS tile are the most reliable triggers.
+- Headset button may be intercepted by the music player; lock-screen notification actions and QS tile are the most reliable triggers.
 - Some DRM-heavy apps may withhold title/artist from MediaSession.
-- On some devices, Doze mode may delay Accessibility Service key events. Exclude CheckItOut from battery optimization.
+- Different OEM lock-screen policies may change how prominently action buttons are shown.
 
 ## Roadmap
 
