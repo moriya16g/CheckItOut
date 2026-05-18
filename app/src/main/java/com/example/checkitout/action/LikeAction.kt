@@ -103,6 +103,7 @@ object LikeAction {
                     musicKey = ctx.musicKey,
                     loudness = ctx.loudness,
                     lyricsSnippet = ctx.lyricsSnippet,
+                    updatedAt = System.currentTimeMillis(),
                 )
                 Log.i(TAG, "context attached id=$rowId place=${ctx.placeLabel} audio=${ctx.audioOutput}")
             } catch (t: Throwable) {

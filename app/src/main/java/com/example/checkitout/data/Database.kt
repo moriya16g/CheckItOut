@@ -9,6 +9,7 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.Update
 import android.content.Context
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
@@ -22,6 +23,8 @@ data class LikedTrack(
     val album: String?,
     @ColumnInfo(name = "package_name") val packageName: String,
     @ColumnInfo(name = "liked_at") val likedAt: Long,
+    /** Last modified time for this row (used for cross-device merge conflict resolution). */
+    @ColumnInfo(name = "updated_at") val updatedAt: Long = likedAt,
     /** Identifier of the playlist this entry was filed under. "default" for inbox. */
     val playlist: String = "default",
     /**
@@ -90,6 +93,9 @@ interface LikedTrackDao {
     @Insert
     suspend fun insert(track: LikedTrack): Long
 
+    @Update
+    suspend fun update(track: LikedTrack)
+
     @Query("SELECT * FROM liked_tracks ORDER BY liked_at DESC")
     fun observeAll(): Flow<List<LikedTrack>>
 
@@ -138,7 +144,8 @@ interface LikedTrackDao {
             instrumentalness = :instrumentalness,
             music_key = :musicKey,
             loudness = :loudness,
-            lyrics_snippet = :lyricsSnippet
+            lyrics_snippet = :lyricsSnippet,
+            updated_at = :updatedAt
         WHERE id = :id
     """)
     suspend fun attachContext(
@@ -171,10 +178,11 @@ interface LikedTrackDao {
         musicKey: Int?,
         loudness: Float?,
         lyricsSnippet: String?,
+        updatedAt: Long,
     )
 }
 
-@Database(entities = [LikedTrack::class], version = 4, exportSchema = false)
+    @Database(entities = [LikedTrack::class], version = 5, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun likedTrackDao(): LikedTrackDao
 
@@ -240,6 +248,14 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Add per-row update timestamp used for cross-device edit merge (LWW). */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE liked_tracks ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE liked_tracks SET updated_at = liked_at WHERE updated_at = 0")
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -247,7 +263,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "checkitout.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                     .also { instance = it }
             }

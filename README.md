@@ -42,6 +42,9 @@ The app now includes an on-device **Analytics** view that turns your likes into 
 ### Selection Delete
 Both the recent-playback buffer and the liked-song list support multi-select deletion from the app UI.
 
+### Editable Logs
+Saved logs are editable from the in-app list. You can revise title/artist/album and context fields (place, weather, activity, audio route, lyrics snippet, and optional numeric context values) after the moment is captured.
+
 ### Cross-Device Sync
 Pick or create a single `checkitout_sync.json` file in Google Drive, Dropbox, OneDrive, or another SAF-backed provider. CheckItOut reads and writes that file directly, which works even with providers that do not expose folder-tree selection. **WorkManager** automatically retries when offline — or hit the manual "Sync now" button.
 
@@ -161,7 +164,7 @@ If you skip these, the core like flow still works. Those fields are just left nu
 
 | Aspect | Detail |
 |---|---|
-| Merge strategy | Union by `syncId` (title + artist + ms-timestamp). Each like is unique |
+| Merge strategy | Union by `syncId` + last-write-wins updates by `updatedAt` (newer edit wins) |
 | Storage model | Single JSON document selected through SAF (`CreateDocument` / `OpenDocument`) |
 | Background sync | WorkManager, every 1 hour, requires network |
 | Offline | Queued with exponential back-off; auto-retries on reconnect |

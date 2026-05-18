@@ -18,13 +18,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -526,9 +530,11 @@ private fun LikedRow(
     onSelectedChange: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
+    val app = context.applicationContext as CheckItOutApp
     val scope = rememberCoroutineScope()
     val df = remember { SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()) }
     var resolvingApple by remember(row.id) { mutableStateOf(false) }
+    var editing by remember(row.id) { mutableStateOf(false) }
 
     Card(Modifier.fillMaxWidth()) {
         Row(
@@ -552,6 +558,9 @@ private fun LikedRow(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    TextButton(onClick = { editing = true }) {
+                        Text("編集")
+                    }
                     TextButton(onClick = { MusicLinks.open(context, MusicLinks.spotifySearchUrl(row)) }) {
                         Text("Spotify")
                     }
@@ -574,4 +583,150 @@ private fun LikedRow(
             }
         }
     }
+
+    if (editing) {
+        EditLikedTrackDialog(
+            initial = row,
+            onDismiss = { editing = false },
+            onSave = { edited ->
+                scope.launch {
+                    app.container.db.likedTrackDao().update(edited.copy(updatedAt = System.currentTimeMillis()))
+                    toast(context, "ログを更新しました")
+                    editing = false
+                }
+            }
+        )
+    }
 }
+
+@Composable
+private fun EditLikedTrackDialog(
+    initial: LikedTrack,
+    onDismiss: () -> Unit,
+    onSave: (LikedTrack) -> Unit,
+) {
+    var title by remember(initial.id) { mutableStateOf(initial.title) }
+    var artist by remember(initial.id) { mutableStateOf(initial.artist.orEmpty()) }
+    var album by remember(initial.id) { mutableStateOf(initial.album.orEmpty()) }
+    var playlist by remember(initial.id) { mutableStateOf(initial.playlist) }
+    var packageName by remember(initial.id) { mutableStateOf(initial.packageName) }
+    var placeLabel by remember(initial.id) { mutableStateOf(initial.placeLabel.orEmpty()) }
+    var weather by remember(initial.id) { mutableStateOf(initial.weather.orEmpty()) }
+    var activity by remember(initial.id) { mutableStateOf(initial.activity.orEmpty()) }
+    var audioOutput by remember(initial.id) { mutableStateOf(initial.audioOutput.orEmpty()) }
+    var btDeviceName by remember(initial.id) { mutableStateOf(initial.btDeviceName.orEmpty()) }
+    var timeBucket by remember(initial.id) { mutableStateOf(initial.timeBucket.orEmpty()) }
+    var lyricsSnippet by remember(initial.id) { mutableStateOf(initial.lyricsSnippet.orEmpty()) }
+
+    var lat by remember(initial.id) { mutableStateOf(initial.lat?.toString().orEmpty()) }
+    var lng by remember(initial.id) { mutableStateOf(initial.lng?.toString().orEmpty()) }
+    var tempC by remember(initial.id) { mutableStateOf(initial.tempC?.toString().orEmpty()) }
+    var humidityPct by remember(initial.id) { mutableStateOf(initial.humidityPct?.toString().orEmpty()) }
+    var stepCount by remember(initial.id) { mutableStateOf(initial.stepCount?.toString().orEmpty()) }
+    var accelMagnitude by remember(initial.id) { mutableStateOf(initial.accelMagnitude?.toString().orEmpty()) }
+    var positionMs by remember(initial.id) { mutableStateOf(initial.positionMs?.toString().orEmpty()) }
+    var durationMs by remember(initial.id) { mutableStateOf(initial.durationMs?.toString().orEmpty()) }
+    var positionPct by remember(initial.id) { mutableStateOf(initial.positionPct?.toString().orEmpty()) }
+    var bpm by remember(initial.id) { mutableStateOf(initial.bpm?.toString().orEmpty()) }
+    var energy by remember(initial.id) { mutableStateOf(initial.energy?.toString().orEmpty()) }
+    var valence by remember(initial.id) { mutableStateOf(initial.valence?.toString().orEmpty()) }
+    var danceability by remember(initial.id) { mutableStateOf(initial.danceability?.toString().orEmpty()) }
+    var acousticness by remember(initial.id) { mutableStateOf(initial.acousticness?.toString().orEmpty()) }
+    var instrumentalness by remember(initial.id) { mutableStateOf(initial.instrumentalness?.toString().orEmpty()) }
+    var musicKey by remember(initial.id) { mutableStateOf(initial.musicKey?.toString().orEmpty()) }
+    var loudness by remember(initial.id) { mutableStateOf(initial.loudness?.toString().orEmpty()) }
+
+    val scroll = rememberScrollState()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("ログ編集") },
+        text = {
+            Column(Modifier.fillMaxWidth().verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                EditField("title", title) { title = it }
+                EditField("artist", artist) { artist = it }
+                EditField("album", album) { album = it }
+                EditField("playlist", playlist) { playlist = it }
+                EditField("packageName", packageName) { packageName = it }
+                EditField("timeBucket", timeBucket) { timeBucket = it }
+                EditField("placeLabel", placeLabel) { placeLabel = it }
+                EditField("weather", weather) { weather = it }
+                EditField("activity", activity) { activity = it }
+                EditField("audioOutput", audioOutput) { audioOutput = it }
+                EditField("btDeviceName", btDeviceName) { btDeviceName = it }
+                EditField("lyricsSnippet", lyricsSnippet) { lyricsSnippet = it }
+
+                EditField("lat", lat) { lat = it }
+                EditField("lng", lng) { lng = it }
+                EditField("tempC", tempC) { tempC = it }
+                EditField("humidityPct", humidityPct) { humidityPct = it }
+                EditField("stepCount", stepCount) { stepCount = it }
+                EditField("accelMagnitude", accelMagnitude) { accelMagnitude = it }
+                EditField("positionMs", positionMs) { positionMs = it }
+                EditField("durationMs", durationMs) { durationMs = it }
+                EditField("positionPct", positionPct) { positionPct = it }
+                EditField("bpm", bpm) { bpm = it }
+                EditField("energy", energy) { energy = it }
+                EditField("valence", valence) { valence = it }
+                EditField("danceability", danceability) { danceability = it }
+                EditField("acousticness", acousticness) { acousticness = it }
+                EditField("instrumentalness", instrumentalness) { instrumentalness = it }
+                EditField("musicKey", musicKey) { musicKey = it }
+                EditField("loudness", loudness) { loudness = it }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onSave(
+                    initial.copy(
+                        title = title.ifBlank { initial.title },
+                        artist = artist.blankToNull(),
+                        album = album.blankToNull(),
+                        playlist = playlist.ifBlank { initial.playlist },
+                        packageName = packageName.ifBlank { initial.packageName },
+                        timeBucket = timeBucket.blankToNull(),
+                        placeLabel = placeLabel.blankToNull(),
+                        weather = weather.blankToNull(),
+                        activity = activity.blankToNull(),
+                        audioOutput = audioOutput.blankToNull(),
+                        btDeviceName = btDeviceName.blankToNull(),
+                        lyricsSnippet = lyricsSnippet.blankToNull(),
+                        lat = lat.toDoubleOrNull(),
+                        lng = lng.toDoubleOrNull(),
+                        tempC = tempC.toFloatOrNull(),
+                        humidityPct = humidityPct.toFloatOrNull(),
+                        stepCount = stepCount.toIntOrNull(),
+                        accelMagnitude = accelMagnitude.toFloatOrNull(),
+                        positionMs = positionMs.toLongOrNull(),
+                        durationMs = durationMs.toLongOrNull(),
+                        positionPct = positionPct.toFloatOrNull(),
+                        bpm = bpm.toFloatOrNull(),
+                        energy = energy.toFloatOrNull(),
+                        valence = valence.toFloatOrNull(),
+                        danceability = danceability.toFloatOrNull(),
+                        acousticness = acousticness.toFloatOrNull(),
+                        instrumentalness = instrumentalness.toFloatOrNull(),
+                        musicKey = musicKey.toIntOrNull(),
+                        loudness = loudness.toFloatOrNull(),
+                    )
+                )
+            }) { Text("保存") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("キャンセル") }
+        }
+    )
+}
+
+@Composable
+private fun EditField(label: String, value: String, onChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        label = { Text(label) },
+    )
+}
+
+private fun String.blankToNull(): String? = trim().takeIf { it.isNotEmpty() }

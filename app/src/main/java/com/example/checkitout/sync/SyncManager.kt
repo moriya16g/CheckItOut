@@ -77,14 +77,28 @@ object SyncManager {
 
         // 3. Read local data
         val localTracks = dao.getAll()
-        val localSyncIds = localTracks.map { it.syncId }.toSet()
+        val localMap = localTracks.associateBy { it.syncId }.toMutableMap()
+        val localSyncIds = localMap.keys
 
         // 4. Import remote-only tracks into local DB
         var imported = 0
+        var updated = 0
         for ((syncId, obj) in remoteMap) {
             if (syncId !in localSyncIds) {
                 dao.insert(jsonToTrack(obj))
                 imported++
+            } else {
+                val local = localMap.getValue(syncId)
+                val remote = jsonToTrack(obj)
+                when {
+                    remote.updatedAt > local.updatedAt -> {
+                        dao.update(remote.copy(id = local.id))
+                        updated++
+                    }
+                    local.updatedAt > remote.updatedAt -> {
+                        remoteMap[syncId] = trackToJson(local)
+                    }
+                }
             }
         }
 
@@ -102,7 +116,7 @@ object SyncManager {
 
         // 7. Record sync time
         prefs(context).edit().putLong(KEY_LAST_SYNC, System.currentTimeMillis()).apply()
-        Log.i(TAG, "sync complete: imported=$imported, total=${remoteMap.size}")
+        Log.i(TAG, "sync complete: imported=$imported, updated=$updated, total=${remoteMap.size}")
         imported
     }
 
@@ -140,6 +154,7 @@ object SyncManager {
         put("album", t.album ?: "")
         put("packageName", t.packageName)
         put("likedAt", t.likedAt)
+        put("updatedAt", t.updatedAt)
         put("playlist", t.playlist)
         // LikeContext fields (omit when null to keep JSON compact)
         putOpt("tzId", t.tzId)
@@ -193,6 +208,7 @@ object SyncManager {
             album = o.optString("album").takeIf { it.isNotBlank() },
             packageName = o.optString("packageName", "synced"),
             likedAt = likedAt,
+            updatedAt = o.optLong("updatedAt", likedAt),
             playlist = o.optString("playlist", "default"),
             syncId = o.optString("syncId", LikedTrack.buildSyncId(title, artist, likedAt)),
             tzId = o.optStringOrNull("tzId"),
