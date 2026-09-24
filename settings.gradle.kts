@@ -20,4 +20,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "CheckItOut"
-include(":app")
+include(":mobile", ":wear", ":shared")

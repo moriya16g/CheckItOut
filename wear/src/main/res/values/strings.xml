@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CheckItOut</string>
+    <string name="tile_label">いいね</string>
+    <string name="complication_label">いいね</string>
+    <string name="like">いいね</string>
+    <string name="status_sending">送信中…</string>
+    <string name="status_ok">保存しました</string>
+    <string name="status_no_track">再生中の曲が見つかりません</string>
+    <string name="status_no_permission">スマホで通知アクセスを許可してください</string>
+    <string name="status_no_phone">スマホに接続できません</string>
+    <string name="status_timeout">スマホから応答がありません</string>
+    <string name="status_error">保存に失敗しました</string>
+</resources>
